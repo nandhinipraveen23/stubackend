@@ -1,0 +1,56 @@
+name: Deploy Node.js App to EC2
+
+on:
+  push:
+    branches:
+      - main   # deploy on push to main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        script: |
+          # Create deployment folder if it doesn't exist
+          mkdir -p ${{ secrets.APP_DIR }}
+          cd ${{ secrets.APP_DIR }}
+
+          # Pull latest code or clone if folder is empty
+          git pull || git clone https://github.com/nandhinipraveen23/stubackend.git .
+
+          # Install dependencies
+          npm install
+
+          # Create .env file dynamically
+          echo "MONGO_URI=${{ secrets.MONGO_URI }}" > .env
+          echo "PORT=${{ secrets.PORT }}" >> .env
+
+          # Stop existing PM2 app if running
+          pm2 stop student-backend || true
+
+          # Start the app with PM2
+          pm2 start server.js --name "student-backend" --env production
+
+          # Save PM2 process list
+          pm2 save
+
+          # Optional: check PM2 status
+          pm2 status
